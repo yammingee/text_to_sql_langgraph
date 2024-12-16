@@ -21,9 +21,9 @@ def extract_colmns_names(selected_tables):
 
 
 # 쿼리 실행
-def sql_execution(engine,inputs):
+def sql_execution(_self, inputs):
     try:
-        with engine.db.connect() as connection:
+        with _self.db.connect() as connection:
             result = connection.execute(inputs)
             rows = result.fetchall()  # 모든 결과 가져오기
             columns = result.keys()  # 컬럼명 가져오기

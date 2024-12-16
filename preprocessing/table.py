@@ -62,7 +62,6 @@ def structured_tables(table_info):
             f"Columns: {column_descriptions}{relationships_text}"
         )
         structured_texts.append(structured_text)
-
     return structured_texts
 
 # 컬럼에서 유효값 추출 (주석이나 제약조건 기반)

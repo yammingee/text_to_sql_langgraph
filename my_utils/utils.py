@@ -1,6 +1,5 @@
 
 from dotenv import load_dotenv
-from langchain.chat_models import ChatOpenAI
 
 # .env 파일에서 환경 변수 로드
 load_dotenv()
@@ -61,6 +60,11 @@ def enable_chat_history(func):
             st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
         for msg in st.session_state["messages"]:
             st.chat_message(msg["role"]).write(msg["content"])
+
+        # Ensure session state initialization
+        if "initialized" not in st.session_state:
+            st.session_state["initialized"] = False
+
 
     def execute(*args, **kwargs):
         func(*args, **kwargs)
@@ -131,7 +135,7 @@ def configure_db(db_uri):
         # sqlite:/// 상대 경로 연결 / ////면 절대 경로 연결
         db_uri = f"sqlite:////{db_filepath}"
         creator = lambda: sqlite3.connect(f"file:{db_filepath}?mode=ro", uri=True)
-        db = SQLDatabase(create_engine("sqlite:///", creator=creator))
+        db = create_engine("sqlite:///", creator=creator)
 
     if db_uri == 'USE_DBAAS_DB':
         DATABASE_USER = 'root'
@@ -162,3 +166,5 @@ def getEnumDatas():
     enum_metadata = pd.read_csv(filepath, delimiter=',')
     enum_list = ", ".join([f"{row['column']}: {row['valid_values']}" for _, row in enum_metadata.iterrows()])
     return enum_list
+
+
