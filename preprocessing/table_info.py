@@ -1,4 +1,5 @@
 from sqlalchemy import MetaData
+from langchain.schema import Document
 
 
 # 테이블 메타데이터에서 유효값 추출
@@ -75,3 +76,12 @@ def extract_valid_values(column):
             if hasattr(constraint, 'sqltext'):
                 return [val.strip("'") for val in constraint.sqltext.text.split("IN (")[1].split(")")[0].split(",")]
     return []
+
+
+# Document 객체 리스트 생성
+def to_text_document(table_names):
+    docs = [
+        Document(page_content=table_name, metadata={"name": table_name})
+        for table_name in table_names
+    ]
+    return docs

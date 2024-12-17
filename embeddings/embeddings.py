@@ -1,9 +1,13 @@
 import faiss
 import numpy as np
+from numpy import dot
+from numpy.linalg import norm
 
 from langchain_openai import OpenAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores.utils import DistanceStrategy
 from sklearn.preprocessing import normalize
-from sklearn.metrics.pairwise import cosine_similarity
 
 # 임베딩 생성 함수
 def generate_embeddings(text_chunks):
@@ -22,11 +26,11 @@ def create_faiss_index(embeddings, dim=1024):
     # faiss 로컬 저장소에 저장
     faiss_file_path = "faiss_index.idx"
     faiss.write_index(index, faiss_file_path)
-    print(f"FAISS index saved to: {faiss_file_path}")
+    # print(f"FAISS index saved to: {faiss_file_path}")
 
     # 저장된 파일에서 인덱스를 로드 (테스트)
     loaded_index = faiss.read_index(faiss_file_path)
-    print(f"FAISS index loaded. Total vectors: {loaded_index.ntotal}")
+    # print(f"FAISS index loaded. Total vectors: {loaded_index.ntotal}")
     return loaded_index
 
 
@@ -48,3 +52,49 @@ def search_faiss_index(index, query_embedding, top_k=3):
 
     return distances[0], indices[0]
 
+# 임베딩 ver 2
+
+def to_embeddings_for_table(table_info):
+    embeddings = embeddings_model.aembed_documents([table_info])
+    len(embeddings), len(embeddings[0])
+    print(embeddings[0][:20])
+    return embeddings
+
+def to_embeddings_for_table(question):
+    embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
+    embedded_query = embeddings_model.embed_query([question])
+    print(embedded_query[:5])
+    return embedded_query
+
+def cos_sim(A,B):
+    return dot(A, B)/(norm(A)*norm(B))
+
+
+def similarity_search(embeddings, embedded_query):
+    for embedding in embeddings:
+        print(cos_sim(embedding, embedded_query))
+
+def preprocessing(table_info):
+    # 문서 로드 및 분할
+    text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+    chunk_size=1000,
+    chunk_overlap=200,
+    encoding_name='cl100k_base'
+    )
+    documents = text_splitter.split_documents(table_info)
+    len(documents)
+
+    # 문서 임베딩을 벡터스토어에 저장
+    embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
+
+    # 벡터스토어에 문서 임베딩을 저장
+    vectorstore = FAISS.from_documents(documents,
+                                   embedding = embeddings_model,
+                                   distance_strategy = DistanceStrategy.COSINE  
+                                  )
+    vectorstore.save_local('./vectorstore/faiss/table_names')
+    return vectorstore
+
+def load_vectorstore():
+    embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
+    return FAISS.load_local('./vectorstore/faiss/table_names', embeddings_model, allow_dangerous_deserialization=True)

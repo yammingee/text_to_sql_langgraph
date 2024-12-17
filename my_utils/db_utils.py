@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 
 # 테이블 이름 추출
 def extract_table_names(selected_tables):
@@ -56,18 +57,43 @@ def filter_relevant_tables(query, selected_table_names, threshold=0.5):
     print(query_keywords)
     return relevant_tables
 
+# 테이블 관계 추출
+def parse_all_tables(all_tables_text):
+    tables = {}
+    current_table = None
+
+    if isinstance(all_tables_text, list):
+        all_tables_text = "\n".join(all_tables_text)
+
+    for line in all_tables_text.split("\n"):
+        line = line.strip()
+        if line.startswith("Table Name:"):
+            current_table = line.split(":")[1].strip()
+            tables[current_table] = {"relationships": []}
+        elif line.startswith("Column"):
+            match = re.search(r"Column '(\w+)' references '(\w+)' \(Column: (\w+\.\w+)\)", line)
+            if match:
+                column, referred_table, referred_column = match.groups()
+                tables[current_table]["relationships"].append({
+                    "column": column,
+                    "referred_table": referred_table,
+                    "referred_column": referred_column
+                })
+
+    return tables
 
 # 외래키로 연결된 추가 테이블 포함
-def expand_with_foreign_keys(relevant_tables, all_tables):
-    expanded_tables = set(relevant_tables)
-    for table in relevant_tables:
-        for rel in table.get("relationships", []):
-            referred_table_name = rel["referred_table"]
-            referred_table = next(
-                (t for t in all_tables if t["name"] == referred_table_name), None
-            )
-            if referred_table:
-                expanded_tables.add(referred_table)
+def expand_with_foreign_keys(relevant_table, all_tables_text):
+    all_tables = parse_all_tables(all_tables_text)
+
+    # 결과를 저장할 set (중복 제거)
+    expanded_tables = set([relevant_table])
+
+    # relevant_table의 relationships를 탐색
+    if relevant_table in all_tables:
+        relationships = all_tables[relevant_table].get("relationships", [])
+        for rel in relationships:
+            expanded_tables.add(rel["referred_table"])
     return list(expanded_tables)
 
 
