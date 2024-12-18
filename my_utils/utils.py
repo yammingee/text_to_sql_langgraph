@@ -167,4 +167,9 @@ def getEnumDatas():
     enum_list = ", ".join([f"{row['column']}: {row['valid_values']}" for _, row in enum_metadata.iterrows()])
     return enum_list
 
+def getExcludedTabls():
+    file_path = Path(__file__).parent.parent / "assets/excluded_tables.json"
+    with open(file_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
 

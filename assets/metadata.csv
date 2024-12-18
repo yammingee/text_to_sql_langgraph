@@ -1,7 +1,2 @@
 table,column,valid_values
 db_service,ha_type,"SINGLE, REPLICATION, CLUSTER"
-db_service,status,"RUNNING, PENDING, DELETED, DISABLED, REQUEST_FOR_DELETE"
-db_backup_schedule,backup_status,"DELETED, DEACTIVATED, ACTIVATED"
-db_server,data_center,"SL-01"
-backup_history,status,"RUNNING, SUCCESS, FAIL"
-db_server,master_flag,"0,1"

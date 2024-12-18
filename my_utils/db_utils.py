@@ -4,11 +4,8 @@ import re
 # 테이블 이름 추출
 def extract_table_names(selected_tables):
     # 각 테이블 정보 문자열에서 'Table Name: ' 뒤에 나오는 이름만 추출
-    table_names = [
-        table.split('\n')[0].replace('Table Name: ', '').strip()
-        for table in selected_tables
-    ]
-    return table_names
+    # 'Table Name' 뒤의 값을 추출하는 정규 표현식
+    return re.search(r"Table Name:\s*(\S+)", selected_tables).group(1)
 
 # 컬럼 이름 추출
 def extract_colmns_names(selected_tables):
@@ -83,17 +80,19 @@ def parse_all_tables(all_tables_text):
     return tables
 
 # 외래키로 연결된 추가 테이블 포함
-def expand_with_foreign_keys(relevant_table, all_tables_text):
+def expand_with_foreign_keys(relevant_tables, all_tables_text):
     all_tables = parse_all_tables(all_tables_text)
 
     # 결과를 저장할 set (중복 제거)
-    expanded_tables = set([relevant_table])
+    expanded_tables = set(relevant_tables)
 
     # relevant_table의 relationships를 탐색
-    if relevant_table in all_tables:
-        relationships = all_tables[relevant_table].get("relationships", [])
-        for rel in relationships:
-            expanded_tables.add(rel["referred_table"])
+    for relevant_table in relevant_tables:
+        if relevant_table in all_tables:
+            relationships = all_tables[relevant_table].get("relationships", [])
+            for rel in relationships:
+                expanded_tables.add(rel["referred_table"])
+
     return list(expanded_tables)
 
 

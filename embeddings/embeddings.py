@@ -74,7 +74,7 @@ def similarity_search(embeddings, embedded_query):
     for embedding in embeddings:
         print(cos_sim(embedding, embedded_query))
 
-def preprocessing(table_info):
+def preprocessing(table_info, faiss_file_path):
     # 문서 로드 및 분할
     text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
     chunk_size=1000,
@@ -92,9 +92,9 @@ def preprocessing(table_info):
                                    embedding = embeddings_model,
                                    distance_strategy = DistanceStrategy.COSINE  
                                   )
-    vectorstore.save_local('./vectorstore/faiss/table_names')
+    vectorstore.save_local(faiss_file_path)
     return vectorstore
 
-def load_vectorstore():
+def load_vectorstore(faiss_file_path):
     embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
-    return FAISS.load_local('./vectorstore/faiss/table_names', embeddings_model, allow_dangerous_deserialization=True)
+    return FAISS.load_local(faiss_file_path, embeddings_model, allow_dangerous_deserialization=True)

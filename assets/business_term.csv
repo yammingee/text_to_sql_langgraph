@@ -1,3 +1,1 @@
 terms,definition
-HA, High Availability 의 약자로 데이터베이스 시스템의 가용성을 높이기 위한 기술과 방법을 의미한다. SINGLE, REPLICATION, CLUSTER 가 있다.
-REPLICATION, Master와 Slave로 구성된 이중화 서비스이다.

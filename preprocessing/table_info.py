@@ -15,7 +15,7 @@ def get_table_info(engine):
 
             # 컬럼 정보와 유효값 추출
             for column in table.columns:
-                comment = column.comment if column.comment else "no comment"
+                comment = column.comment if column.comment else ""
                 valid_values = extract_valid_values(column)
                 columns.append({"name": column.name, "comment": comment, "valid_values": valid_values})
             # 외래 키 관계 추출
@@ -79,9 +79,9 @@ def extract_valid_values(column):
 
 
 # Document 객체 리스트 생성
-def to_text_document(table_names):
+def to_document(table_infos):
     docs = [
-        Document(page_content=table_name, metadata={"name": table_name})
-        for table_name in table_names
+        Document(page_content=table_info, metadata={"name": table_info})
+        for table_info in table_infos
     ]
     return docs
