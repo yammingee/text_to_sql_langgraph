@@ -54,6 +54,7 @@ def filter_relevant_tables(query, selected_table_names, threshold=0.5):
     print(query_keywords)
     return relevant_tables
 
+
 # 테이블 관계 추출
 def parse_all_tables(all_tables_text):
     tables = {}
@@ -133,3 +134,13 @@ def validate_sql(sql_query, valid_tables, valid_columns):
         raise ValueError("SQL Validation Error:\n" + "\n".join(error_messages))
     # 검증 성공 시 쿼리 반환
     return sql_query
+
+# 테이블의 컬럼, 연관관계 정보 가져오기
+def expanded_tables(self, expanded_tables):
+    extracted_top_relevant_table_info = []
+    for item in self.filtered_structured_all_table_info:
+        for table_name in expanded_tables:
+            if "Table Name: " + table_name + "\n" in item:
+                extracted_top_relevant_table_info.append(item)
+
+    return extracted_top_relevant_table_info

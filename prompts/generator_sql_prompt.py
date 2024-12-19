@@ -36,6 +36,7 @@ def get_prompt():
         - **Do not use any values that are not listed in the enum metadata** for that column.  
         - Use the **few-shot SQL example as a reference** to understand structure and patterns, but do not copy it directly. Adapt the query to fit the specific user question.
         - **Ensure the query does not contain any Markdown syntax**, such as ` ```sql ` blocks, and return only the plain SQL code.
+        
     """
 
 

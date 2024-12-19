@@ -26,13 +26,12 @@ import streamlit as st
 import sqlite3
 import urllib.parse
 import pandas as pd
+
 from pathlib import Path
 from sqlalchemy import create_engine
 
 from streamlit.logger import get_logger
 from langchain_openai import ChatOpenAI
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
-from langchain_community.utilities import SQLDatabase
 
 logger = get_logger('Langchain-Chatbot')
 
@@ -115,11 +114,6 @@ def print_qa(cls, question, answer):
     log_str = "\nUsecase: {}\nQuestion: {}\nAnswer: {}\n" + "------"*10
     logger.info(log_str.format(cls.__name__, question, answer))
 
-@st.cache_resource
-def configure_embedding_model():
-    embedding_model = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
-    return embedding_model
-
 def sync_st_session():
     for k, v in st.session_state.items():
         st.session_state[k] = v
@@ -148,28 +142,42 @@ def configure_db(db_uri):
 
     return db
 
+# 비지니스 용어 사전 로드
 def getBusinessTerm():
-    filepath = Path(__file__).parent.parent / "assets/business_term.csv"
-    df = pd.read_csv(filepath, delimiter=',')
-    terms_list = ", ".join([f"{row['terms']}: {row['definition']}" for _, row in df.iterrows()])
-    return terms_list
+    return read_csv_file("assets/business_term.csv")
 
+# enum 데이터 로드 
+def getEnumDatas():
+    return read_csv_file("assets/metadata.csv")
 
+# few show 로드
 def getFewShotExamples():
-    file_path = Path(__file__).parent.parent / "assets/few_shot_examples.json"
-    with open(file_path, "r", encoding="utf-8") as f:
+    return read_json_file("assets/few_shot_examples.json")
+
+# 제외 테이블 로드
+def getExcludedTabls():
+    return read_json_file("assets/excluded_tables.json")
+
+# 커스텀 고유명사 로드
+def getProperNouns():
+    return read_json_file("assets/query_get_custom_proper_nouns.json")
+
+# information_type 로드
+def getInformationTypeDatas():
+    return read_json_file("assets/get_information_type_data.json")
+
+def read_json_file(file_path):
+    path = Path(__file__).parent.parent / file_path
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
     
-def getEnumDatas():
-    # enum 데이터 추출
-    filepath = Path(__file__).parent.parent / "assets/metadata.csv"
-    enum_metadata = pd.read_csv(filepath, delimiter=',')
-    enum_list = ", ".join([f"{row['column']}: {row['valid_values']}" for _, row in enum_metadata.iterrows()])
-    return enum_list
+def save_to_json_file(data, file_path):
+    with open(file_path, 'w', encoding='utf-8') as file:
+        json.dump(data, file, ensure_ascii=False, indent=4)
 
-def getExcludedTabls():
-    file_path = Path(__file__).parent.parent / "assets/excluded_tables.json"
-    with open(file_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
+def read_csv_file(file_path):
+    path = Path(__file__).parent.parent / file_path
+    data = pd.read_csv(path, delimiter=',')
+    data_list = ", ".join([f"{row['column']}: {row['valid_values']}" for _, row in data.iterrows()])
+    return data_list
 

@@ -1,0 +1,7 @@
+[
+    {
+        "type" : "PROJECT_NAME",
+        "column_name" : "name",
+        "sql" : "SELECT name FROM pms_project;"
+    }
+]
