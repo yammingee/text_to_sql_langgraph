@@ -115,7 +115,7 @@ class ChatMyDBClass:
 
             output_content = result["output"]
             output_lines = [line for line in output_content.split("\n") if line.strip()]
-            print(output_lines)
+
             top_relevant_table = output_lines[3].split(":", 1)[1].strip()
             sql_friendly_question = output_lines[4].split(":", 1)[1].strip()
             top_relevant_table_array = [item.strip() for item in top_relevant_table.split(",")]

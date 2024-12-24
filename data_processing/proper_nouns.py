@@ -133,6 +133,15 @@ def match_with_gpt(user_input, entity_types, proper_nouns):
     return final_result
 
 
+def get_larger_result_count(dict1, dict2):
+    # 각 딕셔너리의 항목 수 계산
+    count_dict1 = len(dict1.get("proper_nouns", [])) + len(dict1.get("information_type", []))
+    count_dict2 = len(dict2.get("proper_nouns", [])) + len(dict2.get("information_type", []))
+    
+    # 결과 갯수가 더 많은 딕셔너리 반환
+    return dict1 if count_dict1 >= count_dict2 else dict2
+
+
 # 사용자 질의에 따른 엔티티 분류 및 고유 명사 추출 처리
 def matched_proper_noun(_self, user_input):
 
@@ -147,12 +156,10 @@ def matched_proper_noun(_self, user_input):
 
     # 리스트 기반 탐색
     list_matched_proper_noun = match_proper_nouns_with_user_define_list(user_input, merged_proper_nouns)
-    if list_matched_proper_noun.get('proper_nouns') and list_matched_proper_noun.get('information_type'):
-        return list_matched_proper_noun
-
-    # GPT API 백업 탐색
+    # GPT 탐색
     gpt_matched_proper_noun = match_with_gpt(user_input, proper_types, merged_proper_nouns)
-    return gpt_matched_proper_noun
+
+    return get_larger_result_count(list_matched_proper_noun, gpt_matched_proper_noun)
 
 
 
