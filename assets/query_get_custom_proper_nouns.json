@@ -2,6 +2,7 @@
     {
         "type" : "PROJECT_NAME",
         "column_name" : "name",
+        "table_name" : "pms_project",
         "sql" : "SELECT name FROM pms_project;"
     }
 ]

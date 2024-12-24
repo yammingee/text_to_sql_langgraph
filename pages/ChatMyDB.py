@@ -5,19 +5,25 @@ import os
 
 from my_utils import utils as utils
 from my_utils import db_utils as db_utils
-from embeddings import embeddings
-from data_processing import table_info as preProcessedTableData
+from rag import preprocessing as RagPreProcessing
+from data_processing import table_info as PreProcessedTableData
 from data_processing import proper_nouns as ProcessingProperNounData
 from langchain.schema.runnable import RunnableMap
 from langchain_community.utilities import SQLDatabase
 from langchain_core.output_parsers import StrOutputParser
 from sqlalchemy import text
+
 from prompts import sql_friendly_question_prompt
 from prompts import generator_sql_prompt
+from few_shot import example_selector as few_shot_selector
 from prompts import response_prompt
 
 st.set_page_config(page_title="ChatSQL", page_icon="🛢")
 st.header('Chat MyDB 💬')
+
+faiss_table_names_file_path = "./vectorstore/faiss/table_names"
+faiss_all_talbe_info_file_path = "./vectorstore/faiss/all_table_info"
+faiss_few_shot_file_path = "./vectorstore/faiss/faiss_few_shot"
 
 class ChatMyDBClass:
 
@@ -40,8 +46,8 @@ class ChatMyDBClass:
             usable_table_names = self.engine.get_usable_table_names()
             self.filtered_table_names = [name for name in usable_table_names if name not in excluded_tables]
 
-            self.table_names_documents = preProcessedTableData.to_document(self.filtered_table_names)
-            all_table_info = preProcessedTableData.get_table_info(self.db)
+            self.table_names_documents = PreProcessedTableData.to_document(self.filtered_table_names)
+            all_table_info = PreProcessedTableData.get_table_info(self.db)
 
             self.filtered_all_table_info = {
                 table_name: info
@@ -49,34 +55,27 @@ class ChatMyDBClass:
                 if table_name not in excluded_tables
             }
 
-            self.filtered_structured_all_table_info = preProcessedTableData.structured_tables(self.filtered_all_table_info)
-            self.all_table_info_documents = preProcessedTableData.to_document(self.filtered_structured_all_table_info)
+            self.filtered_structured_all_table_info = PreProcessedTableData.structured_tables(self.filtered_all_table_info)
+            self.all_table_info_documents = PreProcessedTableData.to_document(self.filtered_structured_all_table_info)
             print("init 3/7 - 메타 정보 전처리 완료")
 
             # FAISS 벡터 저장소 로드 또는 생성
-            faiss_table_names_file_path = "./vectorstore/faiss/table_names"
-            faiss_all_talbe_info_file_path = "./vectorstore/faiss/all_table_info"
-
             if not os.path.exists(faiss_table_names_file_path):
-                self.vectorstore_table_names = embeddings.preprocessing(self.table_names_documents, faiss_table_names_file_path)
-                self.vectorstore_all_table_info = embeddings.preprocessing(self.all_table_info_documents, faiss_all_talbe_info_file_path)
+                self.vectorstore_table_names = RagPreProcessing.to_vectorstore_from_documents(self.table_names_documents, faiss_table_names_file_path)
+                self.vectorstore_all_table_info = RagPreProcessing.to_vectorstore_from_documents(self.all_table_info_documents, faiss_all_talbe_info_file_path)
                 print("init 4/7 - FAISS 생성 및 저장 완료")
             else:
-                self.vectorstore_table_names = embeddings.load_vectorstore(faiss_table_names_file_path)
-                self.vectorstore_all_table_info = embeddings.load_vectorstore(faiss_all_talbe_info_file_path)
+                self.vectorstore_table_names = RagPreProcessing.load_vectorstore(faiss_table_names_file_path)
+                self.vectorstore_all_table_info = RagPreProcessing.load_vectorstore(faiss_all_talbe_info_file_path)
                 print("init 4/7 - 로컬 FAISS 로드 완료")
 
             # 고유 명사 추출 쿼리 설정 로드
             self.proper_nouns_query = utils.getProperNouns()
-            print("init 5/8 - 고유 명사 추출 쿼리 설정 로드 완료")
+            print("init 5/7 - 고유 명사 추출 쿼리 설정 로드 완료")
 
             # 비즈니스 용어 사전 로드
             self.terms_list = utils.getBusinessTerm()
-            print("init 5/7 - 비즈니스 용어 사전 로드 완료")
-
-            # Few-shot 예제 로드
-            self.few_shot_examples = utils.getFewShotExamples()
-            print("init 6/7 - Few-shot 예제 로드 완료")
+            print("init 6/7 - 비즈니스 용어 사전 로드 완료")
 
             # Enum 데이터 로드
             self.enum_list = utils.getEnumDatas()
@@ -92,30 +91,39 @@ class ChatMyDBClass:
             # Step 1: 질문을 SQL-friendly 하게 변환, 관련 테이블 추출 - LLM
             print(f"====Step 1: 질문을 SQL-friendly 하게 변환, 관련 테이블 추출===")
 
-            # 1-1. 고유 명사 및 핵심 키워드 추출
-            matched_proper_nouns = ProcessingProperNounData.matched_proper_noun(self, user_query)
-            print(f"1-1. Proper nouns From Question: {matched_proper_nouns}")
+            # 1-1 ~ 1-2. 고유 명사 및 핵심 키워드 추출
+            matched_merged_proper_nouns = ProcessingProperNounData.matched_proper_noun(self, user_query)
+            matched_proper_nouns = []
+            matched_information_type = []
 
-            # 1-2 ~ 1-4 . SQL-friendly 사용자 질문 변환, 키워드 기반 관련 테이블 추출
+            for proper_noun in matched_merged_proper_nouns.get('proper_nouns', []):
+                matched_proper_nouns.append(proper_noun)
+
+            for info_type in matched_merged_proper_nouns.get('information_type', []):
+                matched_information_type.append(info_type)
+
+            print(f"1-1. Proper nouns From Question: {matched_proper_nouns}")
+            print(f"1-2. Keyword: {matched_information_type}")
+
+            # 1-3 ~ 1-4 . SQL-friendly 사용자 질문 변환, 키워드 기반 관련 테이블 추출
             chain = RunnableMap({"output": sql_friendly_question_prompt.get_prompt() | self.llm | StrOutputParser()})
             result = chain.invoke({"question": user_query,
                                     "proper_nouns" : matched_proper_nouns,
+                                    "information_types" : matched_information_type,
                                     "terms": self.terms_list,
-                                    "table_names": self.filtered_table_names})
+                                    "meta_table_names": self.filtered_table_names})
 
             output_content = result["output"]
             output_lines = [line for line in output_content.split("\n") if line.strip()]
-
-            top_keywords = output_lines[1].split(":", 1)[1].strip()
-            sql_friendly_question = output_lines[2].split(":", 1)[1].strip()
+            print(output_lines)
             top_relevant_table = output_lines[3].split(":", 1)[1].strip()
+            sql_friendly_question = output_lines[4].split(":", 1)[1].strip()
             top_relevant_table_array = [item.strip() for item in top_relevant_table.split(",")]
-        
-            print(f"1-2. SQL-friendly Question: {sql_friendly_question}")
-            print(f"1-3. Extracted Keywords for Table Mapping: {top_keywords}")
-            print(f"1-4. Most Relevant Table: {top_relevant_table}")
 
-            with st.expander("1. SQL-friendly Question:", expanded=True):
+            print(f"1-3. Most Relevant Table: {top_relevant_table}")
+            print(f"1-4. SQL-friendly Question: {sql_friendly_question}")
+
+            with st.expander("Step 1: Rephrased User Question:", expanded=True):
                 st.code(output_content)
 
 
@@ -134,7 +142,6 @@ class ChatMyDBClass:
             
             # 2-2. relevant_table 의 연관관계 테이블 가져오기
             expanded_tables = db_utils.expand_with_foreign_keys(extracted_relevant_tables, self.filtered_structured_all_table_info)
-            rephrased_embedding = embeddings.generate_embeddings([extracted_relevant_table_by_table_name])
             print(f"2-2. Final Selected Tables: {expanded_tables}")
             
             # 2-3. 연관 테이블의 컬럼, 연관관계 정보만 가져오기
@@ -145,63 +152,73 @@ class ChatMyDBClass:
                 st.write(expanded_tables)
 
 
-            # Step 3: Few-shot 예제 검색 및 적용 - RAG
-            print(f"============Step 3: Few-shot 예제 검색 및 적용- RAG============")
-            example_embeddings = embeddings.generate_embeddings([ex["question"] for ex in self.few_shot_examples])
-            few_shot_example_index = embeddings.create_faiss_index(example_embeddings) 
-            distances, indices = few_shot_example_index.search(np.array(rephrased_embedding), 1)
-            closest_example = self.few_shot_examples[indices[0][0]]
-            print(f"3. Selected Few-shot Example: {closest_example}")
-
+            # Step 3: Few-shot 예제 프롬프트 적용 및 SQL 쿼리 생성
+            print(f"============ Step 3: Few-shot 예제 프롬프트 적용 및 SQL 쿼리 생성 ============")
+            selected_example = few_shot_selector.example_selector.select_examples({"question" : sql_friendly_question})[0]
+            print(f"3. Selected Examples: {selected_example}")
             with st.expander("Step 3: Selected Few-shot Example", expanded=True):
-                st.code(closest_example, language="sql")
+                st.code(selected_example, language="json")
 
-
+    
             # Step 4: SQL 쿼리 생성
             print(f"============Step 4: SQL 쿼리 생성 ============")
             query_chain = RunnableMap({"generated_sql": generator_sql_prompt.get_prompt() | self.llm})
             result = query_chain.invoke({
                 "dialect": self.engine.dialect,
-                "few_shot_question": closest_example["question"],
-                "few_shot_sql": closest_example["sql"],
-                "top_relevant_table" : extracted_relevant_tables,
+                "few_shot_question": selected_example["question"],
+                "few_shot_sql": selected_example["sql"],
+                "top_relevant_tables" : extracted_relevant_tables,
                 "table_metadata": extracted_top_relevant_table_info, 
                 "enum_metadata": self.enum_list,
-                "question": user_query
+                "question": sql_friendly_question,
+                "proper_nouns" : matched_proper_nouns,
+                "information_type" : matched_information_type
             })
-            generated_sql = result["generated_sql"].content
-            print(f"4. Generated SQL: {generated_sql}")
+            generated_sql_queries = result["generated_sql"].content.split(";")
+            print(f"4. Generated SQL: {generated_sql_queries}")
 
             with st.expander("Step 4: Generated SQL Query", expanded=True):
-                st.code(generated_sql, language="sql")
+                for i, query in enumerate(generated_sql_queries):
+                    if query.strip():  # 쿼리가 비어있지 않은 경우만 출력
+                        st.code(query.strip(), language="sql")
 
 
             # Step 5: SQL 실행 및 응답 생성
             print(f"============Step 5: SQL 실행 ============")
-            sql_result = db_utils.sql_execution(self, text(generated_sql))
-            print(f"5. SQL Execution Result: {sql_result}")
+            sql_results = []
+            for query in generated_sql_queries:
+                if query.strip():  # 쿼리가 비어있지 않은 경우 실행
+                    sql_result = db_utils.sql_execution(self, text(query.strip()))
+                    sql_results.append(sql_result)
+                    print(f"Executed SQL: {query.strip()}")
+                    print(f"Execution Result: {sql_result}")
 
-            with st.expander("Step 5: SQL Execution Result", expanded=True):
-                if isinstance(sql_result, pd.DataFrame):
-                    st.dataframe(sql_result)
-                else:
-                    st.write(sql_result)
+            with st.expander("Step 5: SQL Execution Results", expanded=True):
+                for i, result in enumerate(sql_results):
+                    if isinstance(result, pd.DataFrame):
+                        st.write(f"Result for Query {i+1}:")
+                        st.dataframe(result)
+                    else:
+                        st.write(f"Result for Query {i+1}: {result}")
         
-
             # Step 6: LLM을 활용한 자연어 응답 생성
             print(f"====Step 6: Generate Natural Language Response ===")
             response_chain = RunnableMap({"response": response_prompt.get_prompt() | self.llm})
             result = response_chain.invoke({
                 "user_query": user_query,
-                "generated_sql": generated_sql,
-                "sql_result": sql_result
+                "generated_sql": ";\n".join(generated_sql_queries),  # 모든 쿼리를 하나의 문자열로 전달
+                "sql_result": sql_results
             })
             response = result["response"].content
             print(f"6. Generate Natural Language Response: {response}")
 
             with st.expander("Step 6: Assistant's Response", expanded=True):
                 st.write(response)
-                st.dataframe(sql_result)
+                for result in sql_results:
+                    if isinstance(result, pd.DataFrame):
+                        st.dataframe(result)
+                    else:
+                        st.write(result)
 
             return response
 

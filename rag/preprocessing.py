@@ -53,13 +53,6 @@ def search_faiss_index(index, query_embedding, top_k=3):
     return distances[0], indices[0]
 
 # 임베딩 ver 2
-
-def to_embeddings_for_table(table_info):
-    embeddings = embeddings_model.aembed_documents([table_info])
-    len(embeddings), len(embeddings[0])
-    print(embeddings[0][:20])
-    return embeddings
-
 def to_embeddings_for_table(question):
     embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
     embedded_query = embeddings_model.embed_query([question])
@@ -74,27 +67,31 @@ def similarity_search(embeddings, embedded_query):
     for embedding in embeddings:
         print(cos_sim(embedding, embedded_query))
 
-def preprocessing(table_info, faiss_file_path):
+def to_vectorstore_from_documents(documents, faiss_file_path):
     # 문서 로드 및 분할
     text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
     chunk_size=1000,
     chunk_overlap=200,
     encoding_name='cl100k_base'
     )
-    documents = text_splitter.split_documents(table_info)
+    documents = text_splitter.split_documents(documents)
     len(documents)
 
-    # 문서 임베딩을 벡터스토어에 저장
-    embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
-
+    embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
     # 벡터스토어에 문서 임베딩을 저장
     vectorstore = FAISS.from_documents(documents,
-                                   embedding = embeddings_model,
+                                   embedding = embedding_model,
                                    distance_strategy = DistanceStrategy.COSINE  
                                   )
     vectorstore.save_local(faiss_file_path)
     return vectorstore
 
+def to_vectorstore_from_texts(texts, faiss_file_path, metadatas):
+    embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
+    vectorstore = FAISS.from_texts(texts, embedding_model, metadatas=metadatas)
+    vectorstore.save_local(faiss_file_path)
+    return vectorstore
+
 def load_vectorstore(faiss_file_path):
-    embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
-    return FAISS.load_local(faiss_file_path, embeddings_model, allow_dangerous_deserialization=True)
+    embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
+    return FAISS.load_local(faiss_file_path, embedding_model, allow_dangerous_deserialization=True)
