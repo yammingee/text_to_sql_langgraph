@@ -91,8 +91,6 @@ def match_with_gpt(user_input, entity_types, proper_nouns):
                 result["information_type"].extend(matches)
     result if result["proper_nouns"] or result["information_type"] else {}
 
-    print(result)
-
     # GPT 요청 구성
     entity_instructions = ", ".join([f"'{entity}'" for entity in entity_types])
 

@@ -88,9 +88,7 @@ class ChatMyDBClass:
     def process_user_query(self, user_query):
 
         try:
-            # Step 1: 질문을 SQL-friendly 하게 변환, 관련 테이블 추출 - LLM
-            print(f"====Step 1: 질문을 SQL-friendly 하게 변환, 관련 테이블 추출===")
-
+            print(f"====Step 1. 사용자 질문 분석 : NER 및 Embedding 기반 고유명사/키워드 추출===")
             # 1-1 ~ 1-2. 고유 명사 및 핵심 키워드 추출
             matched_merged_proper_nouns = ProcessingProperNounData.matched_proper_noun(self, user_query)
             matched_proper_nouns = []
@@ -105,7 +103,9 @@ class ChatMyDBClass:
             print(f"1-1. Proper nouns From Question: {matched_proper_nouns}")
             print(f"1-2. Keyword: {matched_information_type}")
 
-            # 1-3 ~ 1-4 . SQL-friendly 사용자 질문 변환, 키워드 기반 관련 테이블 추출
+            print(f"====Step 2. 관련 테이블 검색: 벡터 검색 및 유사도 기반 테이블/컬럼 매핑===")
+
+            print(f"====Step 3. 질문 재구성: GPT 및 규칙 기반 SQL-friendly 문장 생성===")
             chain = RunnableMap({"output": sql_friendly_question_prompt.get_prompt() | self.llm | StrOutputParser()})
             result = chain.invoke({"question": user_query,
                                     "proper_nouns" : matched_proper_nouns,
@@ -115,10 +115,12 @@ class ChatMyDBClass:
 
             output_content = result["output"]
             output_lines = [line for line in output_content.split("\n") if line.strip()]
-
-            top_relevant_table = output_lines[3].split(":", 1)[1].strip()
-            sql_friendly_question = output_lines[4].split(":", 1)[1].strip()
+            top_relevant_table = output_lines[0].split(":", 1)[1].strip()
+            sql_friendly_question = output_lines[1].split(":", 1)[1].strip()
             top_relevant_table_array = [item.strip() for item in top_relevant_table.split(",")]
+            if(proper_noun):
+                top_relevant_table_array.append(proper_noun["table_name"])
+            print(top_relevant_table_array)
 
             print(f"1-3. Most Relevant Table: {top_relevant_table}")
             print(f"1-4. SQL-friendly Question: {sql_friendly_question}")
@@ -128,16 +130,18 @@ class ChatMyDBClass:
 
 
             # Step 2: 연관 테이블 및 컬럼 정보 - RAG 로 메타정보에서 찾기
-            print(f"============Step 2: 연관 테이블 및 컬럼 정보 RAG============")
+            print(f"====Step 4. 테이블 검증: RAG를 통해 테이블/컬럼 존재 여부와 메타정보 확인===")
+
             extracted_relevant_tables = []
 
             # 2-1. relevant_table 로 관련 실제 테이블 찾기 (RAG)
             for top_relevant_table in top_relevant_table_array:
-                retriever = self.vectorstore_table_names.as_retriever(search_kwargs={'k': 1})
+                retriever = self.vectorstore_table_names.as_retriever(search_kwargs={'k': 1, 'distance_metric': 'cosine'})
                 docs = retriever.invoke(top_relevant_table)
                 page_contents = [doc.page_content for doc in docs]
                 extracted_relevant_table_by_table_name = page_contents[0].strip()
                 extracted_relevant_tables.append(extracted_relevant_table_by_table_name)
+
             print(f"2-1. Relevant_table: {extracted_relevant_tables}")
             
             # 2-2. relevant_table 의 연관관계 테이블 가져오기
@@ -153,7 +157,7 @@ class ChatMyDBClass:
 
 
             # Step 3: Few-shot 예제 프롬프트 적용 및 SQL 쿼리 생성
-            print(f"============ Step 3: Few-shot 예제 프롬프트 적용 및 SQL 쿼리 생성 ============")
+            print(f"============ Step 5. Few-shot 예제 강화: 클러스터링 기반 다양한 문맥 반영 ============")
             selected_example = few_shot_selector.example_selector.select_examples({"question" : sql_friendly_question})[0]
             print(f"3. Selected Examples: {selected_example}")
             with st.expander("Step 3: Selected Few-shot Example", expanded=True):
@@ -161,13 +165,13 @@ class ChatMyDBClass:
 
     
             # Step 4: SQL 쿼리 생성
-            print(f"============Step 4: SQL 쿼리 생성 ============")
+            print(f"============ Step 6. SQL 생성: 쿼리 최적화 및 실행 가능성 검증 ============")
             query_chain = RunnableMap({"generated_sql": generator_sql_prompt.get_prompt() | self.llm})
             result = query_chain.invoke({
                 "dialect": self.engine.dialect,
                 "few_shot_question": selected_example["question"],
                 "few_shot_sql": selected_example["sql"],
-                "top_relevant_tables" : extracted_relevant_tables,
+                "top_relevant_tables" : expanded_tables,
                 "table_metadata": extracted_top_relevant_table_info, 
                 "enum_metadata": self.enum_list,
                 "question": sql_friendly_question,

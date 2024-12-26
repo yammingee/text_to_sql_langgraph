@@ -91,6 +91,7 @@
     "pms_user_project_map",
     "pms_project_draft",
     "pms_project_draft_assignee_user_map",
-    "pms_project_draft_map"
+    "pms_project_draft_map",
+    "pms_project_dashboard"
 
 ]

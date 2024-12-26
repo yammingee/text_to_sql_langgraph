@@ -1,7 +1,7 @@
 examples = [
     {
         "question": "현재 기준 진행중인 프로젝트",
-        "sql": "SELECT pms_project.name, pms_code.name AS status FROM pms_project JOIN pms_code ON pms_project.status_seq = pms_code.seq WHERE pms_code.name like '%진행%';"
+        "sql": "SELECT pms_project.name, pms_code.name AS status FROM pms_project JOIN pms_code ON pms_project.status_seq = pms_code.seq WHERE pms_code.name LIKE '%진행%';"
     },
     {
         "question": "A 프로젝트의 금주 실제 진척률과 금주 계획 진척률",
